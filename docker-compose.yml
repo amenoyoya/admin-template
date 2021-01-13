@@ -1,0 +1,104 @@
+# ver 3.6 >= required: enable '-w' option for 'docker-compose exec'
+version: "3.8"
+
+networks:
+  # プロジェクト内仮想ネットワーク
+  ## 同一ネットワーク内の各コンテナはサービス名で双方向通信可能
+  appnet:
+    driver: bridge
+    # ネットワークIP範囲を指定する場合
+    # ipam:
+    #   driver: default
+    #   config:
+    #     # 仮想ネットワークのネットワーク範囲を指定
+    #     ## 172.68.0.0/16 の場合、172.68.0.1 ～ 172.68.255.254 のIPアドレスを割り振れる
+    #     ## ただし 172.68.0.1 はゲートウェイに使われる
+    #     - subnet: 172.68.0.0/16
+
+volumes:
+  # volume for mongo service container
+  mongo-data:
+
+services:
+  # node service container: mcr.microsoft.com/playwright (nodejs 14.x)
+  node:
+    build:
+      context: ./ # build from ./Dockerfile
+      args:
+        # use current working user id
+        UID: $USER_ID
+    logging:
+      driver: json-file
+    # tcp://localhost:<port> => service://node:<port>
+    network_mode: host
+    # enable terminal
+    tty: true
+    volumes:
+      # ./ => service:node:/work/
+      - ./:/work/
+    environment:
+      TZ: Asia/Tokyo
+
+  # mongo service container: mongo db v4.4
+  mongo:
+    image: mongo:4.4
+    logging:
+      driver: json-file
+    # restart: always
+    # 所属ネットワーク
+    networks:
+      - appnet
+    ports:
+      # tcp://localhost:${MONGO_PORT} => service://db:27017
+      - ${MONGO_PORT:-27017}:27017
+    volumes:
+      # database data persistence
+      - mongo-data:/data/db/
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+      TZ: Asia/Tokyo
+
+  # admin service container: mongo-express:latest
+  admin:
+    image: mongo-express:latest
+    logging:
+      driver: json-file
+    # restart: always
+    # 所属ネットワーク
+    networks:
+      - appnet
+    ports:
+      # http://localhost:${MONGO_EXPRESS_PORT} => service://admin:8081
+      - ${MONGO_EXPRESS_PORT:-8081}:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: root
+      ME_CONFIG_MONGODB_SERVER: mongo # service://mongo
+      ME_CONFIG_MONGODB_PORT: 27017
+      TZ: Asia/Tokyo
+  
+  # mongodb rest api server service container: softinstigate/restheart:5.1.1
+  restheart:
+    image: softinstigate/restheart:5.1.1
+    logging:
+      driver: json-file
+    # restart: always
+    # 所属ネットワーク
+    networks:
+      - appnet
+    ports:
+      # http://localhost:${RESTHEART_PORT} => service://restheart:8080
+      - ${RESTHEART_PORT:-8080}:8080
+    # ACL（ユーザ権限・認証）を変更したい場合は、自作の properties ファイルを指定して起動する
+    ## Default `users.yml`:
+    ### - id: admin, password: secret, role: admin
+    ### - id: user, password: secret, role: user
+    ## Default `acl.yml`:
+    ### - admin: role can execute any request
+    ### - user: role can execute any request on collection /{username}
+    command: ["--envFile", "/opt/restheart/etc/default.properties"]
+    environment:
+      # MONGO_URI: mongodb://<user>:<password>@<host>
+      MONGO_URI: mongodb://root:root@mongo
+      TZ: Asia/Tokyo
