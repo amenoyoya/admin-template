@@ -151,7 +151,7 @@ EOS
     ;;
 "node")
     if [ "$w" != "" ]; then
-        docker-compose exec -Tw "$w" app "${@:2:($#-1)}"
+        docker-compose exec -Tw "/work/$w" node "${@:2:($#-1)}"
     else
         docker-compose exec -T node "${@:2:($#-1)}"
     fi

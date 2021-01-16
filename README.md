@@ -67,7 +67,10 @@ $ ./n up -d
 ## mongo service container: http://localhost:27017
 ## admin service container: http://localhost:8081
 ## restheart service container: http://localhost:8080
+```
 
+### Create strapi project
+```bash
 # strapiプロジェクト作成
 ## $ export USER_ID=$UID && docker-compose exec node yarn create strapi-app app
 $ ./n node yarn create strapi-app app
@@ -87,4 +90,45 @@ $ ./n node yarn create strapi-app app
 # strapi開発サーバ起動
 ## $ export USER_ID=$UID && docker-compose exec -w /work/app/ node yarn develop
 $ w=./app/ ./n node yarn develop
+```
+
+### Create react-admin project
+```bash
+# react-app プロジェクト作成 => ./admin/
+$ ./n node yarn create react-app admin
+
+# react-admin 関連パッケージインストール
+$ w=admin ./n node yarn add react-admin ra-data-json-server prop-types
+
+# start development server: => http://localhost:3000
+$ w=admin ./n node yarn start
+```
+
+#### 日本語翻訳
+```bash
+# react-admin 日本語翻訳プラグインインストール
+$ w=admin ./n node yarn add @bicstone/ra-language-japanese ra-i18n-polyglot
+```
+
+```javascript
+// src/App.js
+import * as React from "react";
+import { Admin, Resource, ListGuesser } from 'react-admin';
+import jsonServerProvider from 'ra-data-json-server';
+
+// 日本語翻訳プラグイン
+import japaneseMessages from '@bicstone/ra-language-japanese';
+import polyglotI18nProvider from 'ra-i18n-polyglot';
+
+const i18nProvider = polyglotI18nProvider(() => japaneseMessages, 'ja');
+
+// JsonServerから自動的にAdminパネル生成
+const dataProvider = jsonServerProvider('https://jsonplaceholder.typicode.com');
+const App = () => (
+  <Admin i18nProvider={i18nProvider} dataProvider={dataProvider}>
+    <Resource name="users" list={ListGuesser} />
+  </Admin>
+);
+
+export default App;
 ```
