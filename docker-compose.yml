@@ -77,28 +77,3 @@ services:
       ME_CONFIG_MONGODB_SERVER: mongo # service://mongo
       ME_CONFIG_MONGODB_PORT: 27017
       TZ: Asia/Tokyo
-  
-  # mongodb rest api server service container: softinstigate/restheart:5.1.1
-  restheart:
-    image: softinstigate/restheart:5.1.1
-    logging:
-      driver: json-file
-    # restart: always
-    # 所属ネットワーク
-    networks:
-      - appnet
-    ports:
-      # http://localhost:${RESTHEART_PORT} => service://restheart:8080
-      - ${RESTHEART_PORT:-8080}:8080
-    # ACL（ユーザ権限・認証）を変更したい場合は、自作の properties ファイルを指定して起動する
-    ## Default `users.yml`:
-    ### - id: admin, password: secret, role: admin
-    ### - id: user, password: secret, role: user
-    ## Default `acl.yml`:
-    ### - admin: role can execute any request
-    ### - user: role can execute any request on collection /{username}
-    command: ["--envFile", "/opt/restheart/etc/default.properties"]
-    environment:
-      # MONGO_URI: mongodb://<user>:<password>@<host>
-      MONGO_URI: mongodb://root:root@mongo
-      TZ: Asia/Tokyo

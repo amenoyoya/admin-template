@@ -151,9 +151,9 @@ EOS
     ;;
 "node")
     if [ "$w" != "" ]; then
-        docker-compose exec -Tw "/work/$w" node "${@:2:($#-1)}"
+        docker-compose exec -w "/work/$w" $opt node "${@:2:($#-1)}"
     else
-        docker-compose exec -T node "${@:2:($#-1)}"
+        docker-compose exec $opt node "${@:2:($#-1)}"
     fi
     ;;
 *)
