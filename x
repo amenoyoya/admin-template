@@ -1,3 +1,55 @@
+#!/bin/bash
+
+cd $(dirname $0)
+export USER_ID="${USER_ID:-$UID}"
+
+case "$1" in
+"init")
+    mkdir -p ./docker/node/
+    mkdir -p ./docker/mongodb/initdb.d/
+    tee ./docker/node/Dockerfile << \EOS
+FROM mcr.microsoft.com/playwright
+
+# Docker実行ユーザIDを build-arg から取得
+ARG USER_ID
+
+RUN if [ "$USER_ID" = "" ] || [ "$USER_ID" = "0" ]; then USER_ID=1026; fi && \
+    : '日本語対応' && \
+    apt-get update && \
+    apt-get -y install locales fonts-ipafont fonts-ipaexfont && \
+    echo "ja_JP UTF-8" > /etc/locale.gen && locale-gen && \
+    : 'install Google Chrome: /usr/bin/google-chrome' && \
+    apt-get install -y wget curl git vim && \
+    wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+    apt-get install -y ./google-chrome-stable_current_amd64.deb && \
+    : 'install autossh' && \
+    apt-get install -y autossh && \
+    : 'Add user (User ID: $USER_ID)' && \
+    if [ "$(getent passwd $USER_ID)" != "" ]; then usermod -u $((USER_ID + 100)) "$(getent passwd $USER_ID | cut -f 1 -d ':')"; fi && \
+    useradd -u $USER_ID -m -s /bin/bash worker && \
+    apt-get install -y sudo && \
+    echo "worker ALL=NOPASSWD: ALL" >> '/etc/sudoers' && \
+    : 'Fix permission' && \
+    mkdir -p /usr/local/share/.config/ && \
+    chown -R worker /usr/local/share/.config/ && \
+    : 'cleanup apt-get caches' && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# 作業ディレクトリ: ./ => service://node:/work/
+WORKDIR /work/
+
+# 作業ユーザ: Docker実行ユーザ
+## => コンテナ側のコマンド実行で作成されるファイルパーミッションをDocker実行ユーザ所有に
+USER worker
+
+# Startup script: install node_modules && npm run start
+CMD ["/bin/bash", "-c", "yarn && yarn start"]
+EOS
+    tee ./docker/mongodb/initdb.d/.gitignore << \EOS
+/*
+!.gitignore
+EOS
+    tee docker-compose.yml << \EOS
 # ver 3.6 >= required: enable '-w' option for 'docker-compose exec'
 version: "3.8"
 
@@ -85,3 +137,29 @@ services:
       ME_CONFIG_MONGODB_SERVER: mongodb # service://mongodb
       ME_CONFIG_MONGODB_PORT: 27017
       TZ: Asia/Tokyo
+EOS
+    tee ./.env << \EOS
+# docker ports
+NODE_PORT=5080
+MONGODB_EXPRESS_PORT=27080
+
+# api server config
+REDIS_HOST=redis
+REDIS_PORT=6379
+MONGODB_ENDPOINT=mongodb://root:root@mongodb:27017
+
+# set if you want to get detailed error message
+# DEBUG=true
+EOS
+    ;;
+"node")
+    if [ "$w" != "" ]; then
+        docker-compose exec -w "/work/$w" node ${@:2:($#-1)}
+    else
+        docker-compose exec node ${@:2:($#-1)}
+    fi
+    ;;
+*)
+    docker-compose $*
+    ;;
+esac
